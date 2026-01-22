@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Finder</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --accent-color: #6b8e23; /* Sage Green */
+            --bg-color: #fafaf9;
+            --text-dark: #2d2d2d;
+            --border-light: #e5e5e5;
+        }
+
+        body { 
+            background-color: var(--bg-color); 
+            color: var(--text-dark);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .container { max-width: 900px; margin-top: 50px; }
+
+        /* Minimalist Card Style */
+        .search-section {
+            background: white;
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-control, .form-select {
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.9rem;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--accent-color);
+            box-shadow: none;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background-color: var(--accent-color);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 24px;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+
+        .btn-primary:hover { background-color: #5a781e; }
+        
+        .btn-outline-success {
+            color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        .btn-outline-success:hover {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        /* Minimal Table */
+        .table { --bs-table-bg: transparent; margin-top: 1rem; }
+        .table thead th {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            color: #888;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .table tbody td {
+            padding: 1.2rem 0.75rem;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: middle;
+        }
+
+        #loading { display: none; margin: 2rem 0; }
+        .recipe-id { color: #aaa; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header class="text-center mb-5">
+            <h2 class="fw-light mb-1">Recipe <span class="fw-bold" style="color: var(--accent-color);">Finder</span></h2>
+            <p class="text-muted small">Explore curated culinary inspiration</p>
+        </header>
+
+        <div class="search-section">
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search dish name...">
+                </div>
+                <div class="col-md-3">
+                    <input type="text" id="cuisineInput" class="form-control" placeholder="Cuisine">
+                </div>
+                <div class="col-md-2">
+                    <select id="sortInput" class="form-select">
+                        <option value="title">A-Z</option>
+                        <option value="rating">Rating</option>
+                        <option value="totalTime">Time</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button onclick="fetchRecipes(0)" class="btn btn-primary w-100">Search</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="text-center">
+            <div class="spinner-border text-secondary spinner-border-sm" role="status"></div>
+        </div>
+
+        <div class="recipe-list mt-4">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width: 80px;">ID</th>
+                        <th>Recipe Title</th>
+                        <th>Cuisine</th>
+                        <th>Rating</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="recipeTableBody">
+                    </tbody>
+            </table>
+
+            <div class="d-flex justify-content-between align-items-center mt-5 mb-5">
+                <span id="pageInfo" class="small text-muted">Page 1</span>
+                <div>
+                    <button id="prevBtn" class="btn btn-sm btn-link text-decoration-none text-muted" onclick="changePage(-1)">← Previous</button>
+                    <button id="nextBtn" class="btn btn-sm btn-link text-decoration-none" style="color: var(--accent-color);" onclick="changePage(1)">Next →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 0;
+        const pageSize = 10;
+
+        async function fetchRecipes(pageIndex) {
+            currentPage = pageIndex;
+            const title = document.getElementById('searchInput').value;
+            const cuisine = document.getElementById('cuisineInput').value;
+            const sortBy = document.getElementById('sortInput').value;
+            const direction = sortBy === 'rating' ? 'DESC' : 'ASC';
+
+            document.getElementById('loading').style.display = 'block';
+
+            try {
+                // Fixed backticks for template literals
+                let url = `http://localhost:8080/api/recipes?page=${currentPage}&size=${pageSize}&sortBy=${sortBy}&direction=${direction}`;
+                if (title) url += `&title=${title}`;
+                if (cuisine) url += `&cuisine=${cuisine}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                displayData(data.content);
+                updatePagination(data);
+            } catch (error) {
+                console.error("Error:", error);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function displayData(recipes) {
+            const tableBody = document.getElementById('recipeTableBody');
+            tableBody.innerHTML = '';
+
+            if (recipes.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-5">No recipes found. Try a different search.</td></tr>';
+                return;
+            }
+
+            recipes.forEach(recipe => {
+                const row = `
+                    <tr>
+                        <td class="recipe-id">#${recipe.id}</td>
+                        <td class="fw-semibold">${recipe.title}</td>
+                        <td><span class="text-muted">${recipe.cuisine || 'Global'}</span></td>
+                        <td>${recipe.rating} <small class="text-warning">★</small></td>
+                        <td class="text-end">
+                            <a href="${recipe.url}" target="_blank" class="btn btn-sm btn-outline-success">View</a>
+                        </td>
+                    </tr>
+                `;
+                tableBody.innerHTML += row;
+            });
+        }
+
+        function updatePagination(data) {
+            document.getElementById('pageInfo').innerText = `Showing ${data.number + 1} of ${data.totalPages}`;
+            document.getElementById('prevBtn').style.visibility = data.first ? 'hidden' : 'visible';
+            document.getElementById('nextBtn').style.visibility = data.last ? 'hidden' : 'visible';
+        }
+
+        function changePage(step) {
+            fetchRecipes(currentPage + step);
+        }
+
+        window.onload = () => fetchRecipes(0);
+    </script>
+</body>
+</html>
